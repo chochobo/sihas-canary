@@ -323,7 +323,6 @@ class PmmVirtualSensor(SensorEntity):
         self._attr_name = f"{proxy.name} #{conf.sub_id}" if proxy.name else self._attr_unique_id
         self._attr_device_class = conf.device_class
         self._attr_state_class = conf.state_class
-        self._name = conf['sub_id']
 
         self.value_handler: Callable = conf.value_handler
 
@@ -331,10 +330,6 @@ class PmmVirtualSensor(SensorEntity):
         self._proxy.update()
         self._attr_native_value = self.value_handler(self._proxy.registers)
         self._attr_available = self._proxy._attr_available
-
-    @property
-    def name(self):
-        return self._name
 
 
 class Aqm300(SihasProxy):
