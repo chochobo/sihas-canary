@@ -278,6 +278,7 @@ async def async_setup_entry(
 class Pmm300(SihasProxy):
     def __init__(
         self,
+        device,
         ip: str,
         mac: str,
         device_type: str,
@@ -291,6 +292,7 @@ class Pmm300(SihasProxy):
             config=config,
         )
         self.name = name
+        self._device = device
 
     def get_sub_entities(self) -> List[Entity]:
         return [
@@ -317,12 +319,14 @@ class PmmVirtualSensor(SensorEntity):
     def __init__(self, proxy: Pmm300, conf: PmmConfig) -> None:
         super().__init__()
         self._proxy = proxy
+        self._device = proxy._device
         self._attr_available = self._proxy._attr_available
         self._attr_unique_id = f"{proxy.device_type}-{proxy.mac}-{conf.sub_id}"
         self._attr_native_unit_of_measurement = conf.nuom
         self._attr_name = f"{proxy.name} #{conf.sub_id}" if proxy.name else self._attr_unique_id
         self._attr_device_class = conf.device_class
         self._attr_state_class = conf.state_class
+        self._name = conf['sub_id']
 
         self.value_handler: Callable = conf.value_handler
 
@@ -331,6 +335,21 @@ class PmmVirtualSensor(SensorEntity):
         self._attr_native_value = self.value_handler(self._proxy.registers)
         self._attr_available = self._proxy._attr_available
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def device_info(self):
+        """Information about this entity/device."""
+        return {
+            "identifiers": {("PMM300", self._device.device_id)},
+            # If desired, the name for the device could be different to the entity
+            "name": self._device.name,
+            "sw_version": self._device.firmware_version,
+            "model": self._device.model,
+            "manufacturer": self._device.manufacturer
+        }
 
 class Aqm300(SihasProxy):
     """Representation of AQM-300
