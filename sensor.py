@@ -20,6 +20,9 @@ from homeassistant.const import (
     LIGHT_LUX,
     PERCENTAGE,
     POWER_WATT,
+    ELECTRIC_POTENTIAL_VOLT,
+    ELECTRIC_CURRENT_AMPERE,
+    FREQUENCY_HERTZ,
     TEMP_CELSIUS,
 )
 from homeassistant.core import HomeAssistant
@@ -90,7 +93,7 @@ AQM_GENERIC_SENSOR_DEFINE: Final = {
     "tvoc": {
         "uom": CONCENTRATION_PARTS_PER_BILLION,
         "value_handler": lambda r: r[5],
-        "device_class": None,
+        "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS,
         "state_class": STATE_CLASS_MEASUREMENT,
         "sub_id": "tvoc",
     },
@@ -100,7 +103,16 @@ PMM_KEY_POWER: Final = "power"
 PMM_KEY_THIS_MONTH_ENERGY: Final = "this_month_energy"
 PMM_KEY_THIS_DAY_ENERGY: Final = "this_day_energy"
 PMM_KEY_TOTAL: Final = "total_energy"
-
+PMM_KEY_VOLTAGE: Final = "voltage"
+PMM_KEY_CURRENT: Final = "current"
+PMM_KEY_POWER_FACTOR: Final = "power_factor"
+PMM_KEY_FREQUENCY: Final = "frequency"
+PMM_KEY_THIS_HOUR_ENERGY: Final = "this_hour_energy"
+PMM_KEY_BEFORE_HOUR_ENERGY: Final = "before_hour_energy"
+PMM_KEY_YESTERDAY_ENERGY: Final = "yesterday_energy"
+PMM_KEY_LAST_MONTH_ENERGY: Final = "last_month_energy"
+PMM_KEY_TWO_MONTHS_AGO_ENERGY: Final = "two_months_ago_energy"
+PMM_KEY_THIS_MONTH_FORECAST_ENERGY: Final = "this_month_forecast_energy"
 
 @dataclass
 class PmmConfig:
@@ -140,8 +152,106 @@ PMM_GENERIC_SENSOR_DEFINE: Final = {
         state_class=STATE_CLASS_TOTAL_INCREASING,
         sub_id=PMM_KEY_TOTAL,
     ),
+    PMM_KEY_VOLTAGE: PmmConfig(
+        nuom=ELECTRIC_POTENTIAL_VOLT,
+        value_handler=lambda r: r[0] / 10,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        sub_id=PMM_KEY_VOLTAGE,
+    ),
+    PMM_KEY_CURRENT: PmmConfig(
+        nuom=ELECTRIC_CURRENT_AMPERE,
+        value_handler=lambda r: r[1] / 100,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=STATE_CLASS_MEASUREMENT,
+        sub_id=PMM_KEY_CURRENT,
+    ),
+    PMM_KEY_POWER_FACTOR: PmmConfig(
+        nuom=PERCENTAGE,
+        value_handler=lambda r: r[3] / 10,
+        device_class=SensorDeviceClass.POWER_FACTOR,
+        state_class=STATE_CLASS_MEASUREMENT,
+        sub_id=PMM_KEY_POWER_FACTOR,
+    ),
+    PMM_KEY_FREQUENCY: PmmConfig(
+        nuom=FREQUENCY_HERTZ,
+        value_handler=lambda r: r[4] / 10,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=STATE_CLASS_MEASUREMENT,
+        sub_id=PMM_KEY_FREQUENCY,
+    ),
+    PMM_KEY_THIS_HOUR_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[6] * 10 + r[16],
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_THIS_HOUR_ENERGY,
+    ),
+    PMM_KEY_BEFORE_HOUR_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[7] * 10,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_BEFORE_HOUR_ENERGY,
+    ),
+    PMM_KEY_YESTERDAY_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[9] * 10,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_YESTERDAY_ENERGY,
+    ),
+    PMM_KEY_LAST_MONTH_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[11] * 10,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_LAST_MONTH_ENERGY,
+    ),
+    PMM_KEY_TWO_MONTHS_AGO_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[12] * 10,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_TWO_MONTHS_AGO_ENERGY,
+    ),
+    PMM_KEY_THIS_MONTH_FORECAST_ENERGY: PmmConfig(
+        nuom=ENERGY_WATT_HOUR,
+        value_handler=lambda r: r[13] * 10,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=STATE_CLASS_TOTAL,
+        sub_id=PMM_KEY_THIS_MONTH_FORECAST_ENERGY,
+    ),
 }
 
+# r[0] : 전압
+# r[1] : 전류
+# r[2] : 현재 전력량
+# r[3] : 역률(/10)
+# r[4] : 주파수
+# r[5] : 측정기 누적 전력량(kW로 소숫점 이하 절사)
+# r[6] : 현시간 사용량
+# r[7] : 전시간 사용량
+# r[8] : 당일 사용량
+# r[9] : 전일 사용량
+# r[10] : 당월 사용량
+# r[11] : 전월 사용량
+# r[12] : 전전월 사용량
+# r[13] : 당월 예측 전력량
+# r[14] : 누진 1단계 적용 전력량
+# r[15] : 누진 2단계 적용 전력량
+# r[16] : 현재 20분간 사용량(w)
+# r[17] : 지난 20분간 사용량(w)
+# r[18] : 부하 연결 상태(1: on, 0: off)
+# r[19] : 부하 연결 상태 기준 전력
+# r[20] : 검침일
+# r[21] : 당일 목표 전력(*10 을 해야 앱과 동일)
+# r[22] : 당월 목표 전력(*10 을 해야 앱과 동일)
+# r[23] : 전력량 리셋?
+# r[24] : CT 타입(0:외장형, 1:내장형)
+# r[25] : LCD 방향 표시(0:정방향, 1:역방향)
+# r[26] : 스마트폰 푸시 알림(0: 미사용, 1: 사용, 2:일목표치, 4: 월목표치, 8:월목표치 16+2048=2064: 월예측 누진1단계, 32+4096=4128:월사용 누진1단계, 64: 월예측 누진2단계, 128: 월사용 누진2단계) 각숫자의 합으로 조합됨
+# r[41] * 65536 + r[40] : 측정기 누적 전력(앱상의 w값으로 절사 없음)
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -188,6 +298,16 @@ class Pmm300(SihasProxy):
             PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_THIS_MONTH_ENERGY]),
             PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_THIS_DAY_ENERGY]),
             PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_TOTAL]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_VOLTAGE]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_CURRENT]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_POWER_FACTOR]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_FREQUENCY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_THIS_HOUR_ENERGY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_BEFORE_HOUR_ENERGY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_YESTERDAY_ENERGY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_LAST_MONTH_ENERGY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_TWO_MONTHS_AGO_ENERGY]),
+            PmmVirtualSensor(self, PMM_GENERIC_SENSOR_DEFINE[PMM_KEY_THIS_MONTH_FORECAST_ENERGY]),
         ]
 
 
