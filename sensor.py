@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from datetime import timedelta
 from typing import Callable, Dict, List, Optional
+import asyncio
 
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
@@ -257,7 +258,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     if entry.data[CONF_TYPE] == "PMM":
-        pmm = Pmm300(
+        device = Device("PMM300", entry)
+
+        pmm = Pmm300(device,
             ip=entry.data[CONF_IP],
             mac=entry.data[CONF_MAC],
             device_type=entry.data[CONF_TYPE],
@@ -274,6 +277,51 @@ async def async_setup_entry(
         )
         async_add_entities(aqm.get_sub_entities())
 
+class Device:
+    """Dummy roller (device for HA) for Hello World example."""
+
+    def __init__(self, name, config):
+        """Init dummy roller."""
+        self._id = f"{name}_{config.entry_id}"
+        self._name = name
+        self._callbacks = set()
+        self._loop = asyncio.get_event_loop()
+        # Reports if the roller is moving up or down.
+        # >0 is up, <0 is down. This very much just for demonstration.
+
+        # Some static information about this device
+        self.firmware_version = "1.0"
+        self.model = "PMM300"
+        self.manufacturer = "sihas"
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def device_id(self):
+        """Return ID for roller."""
+        return self._id
+
+    def register_callback(self, callback):
+        """Register callback, called when Roller changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback):
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+    # In a real implementation, this library would call it's call backs when it was
+    # notified of any state changeds for the relevant device.
+    async def publish_updates(self):
+        """Schedule call all registered callbacks."""
+        for callback in self._callbacks:
+            callback()
+
+    def publish_updates(self):
+        """Schedule call all registered callbacks."""
+        for callback in self._callbacks:
+            callback()
 
 class Pmm300(SihasProxy):
     def __init__(
