@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from datetime import timedelta
 from typing import Callable, Dict, List, Optional
+import asyncio
 
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
@@ -257,7 +258,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     if entry.data[CONF_TYPE] == "PMM":
-        pmm = Pmm300(
+        device = Device("PMM300", entry)
+
+        pmm = Pmm300(device,
             ip=entry.data[CONF_IP],
             mac=entry.data[CONF_MAC],
             device_type=entry.data[CONF_TYPE],
@@ -275,9 +278,56 @@ async def async_setup_entry(
         async_add_entities(aqm.get_sub_entities())
 
 
+class Device:
+    """Dummy roller (device for HA) for Hello World example."""
+
+    def __init__(self, name, config):
+        """Init dummy roller."""
+        self._id = f"{name}_{config.entry_id}"
+        self._name = name
+        self._callbacks = set()
+        self._loop = asyncio.get_event_loop()
+        # Reports if the roller is moving up or down.
+        # >0 is up, <0 is down. This very much just for demonstration.
+
+        # Some static information about this device
+        self.firmware_version = "2.03"
+        self.model = "PMM300"
+        self.manufacturer = "sihas"
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def device_id(self):
+        """Return ID for roller."""
+        return self._id
+
+    def register_callback(self, callback):
+        """Register callback, called when Roller changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback):
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+    # In a real implementation, this library would call it's call backs when it was
+    # notified of any state changeds for the relevant device.
+    async def publish_updates(self):
+        """Schedule call all registered callbacks."""
+        for callback in self._callbacks:
+            callback()
+
+    def publish_updates(self):
+        """Schedule call all registered callbacks."""
+        for callback in self._callbacks:
+            callback()
+
 class Pmm300(SihasProxy):
     def __init__(
         self,
+        device,
         ip: str,
         mac: str,
         device_type: str,
@@ -291,6 +341,7 @@ class Pmm300(SihasProxy):
             config=config,
         )
         self.name = name
+        self._device = device
 
     def get_sub_entities(self) -> List[Entity]:
         return [
@@ -317,12 +368,14 @@ class PmmVirtualSensor(SensorEntity):
     def __init__(self, proxy: Pmm300, conf: PmmConfig) -> None:
         super().__init__()
         self._proxy = proxy
+        self._device = proxy._device
         self._attr_available = self._proxy._attr_available
         self._attr_unique_id = f"{proxy.device_type}-{proxy.mac}-{conf.sub_id}"
         self._attr_native_unit_of_measurement = conf.nuom
         self._attr_name = f"{proxy.name} #{conf.sub_id}" if proxy.name else self._attr_unique_id
         self._attr_device_class = conf.device_class
         self._attr_state_class = conf.state_class
+        self._name = conf.sub_id
 
         self.value_handler: Callable = conf.value_handler
 
@@ -331,6 +384,21 @@ class PmmVirtualSensor(SensorEntity):
         self._attr_native_value = self.value_handler(self._proxy.registers)
         self._attr_available = self._proxy._attr_available
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def device_info(self):
+        """Information about this entity/device."""
+        return {
+            "identifiers": {("PMM300", self._device.device_id)},
+            # If desired, the name for the device could be different to the entity
+            "name": self._device.name,
+            "sw_version": self._device.firmware_version,
+            "model": self._device.model,
+            "manufacturer": self._device.manufacturer
+        }
 
 class Aqm300(SihasProxy):
     """Representation of AQM-300
